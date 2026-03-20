@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import QuartzCore
 
 /// A container that provides tilt-based motion and shader context for holographic effects.
 ///
@@ -23,8 +22,7 @@ import QuartzCore
 /// ```
 ///
 /// The container provides:
-/// - Device motion tracking via gyroscope
-/// - Drag gesture for manual tilt control
+/// - Drag gesture for tilt control
 /// - 3D rotation effects synchronized with tilt
 /// - Dynamic shadow based on tilt angle
 /// - Automatic shader context injection
@@ -36,7 +34,6 @@ public struct HolographicCardContainer<Content: View>: View {
   let rotationMultiplier: Double
   @ViewBuilder let content: () -> Content
   
-  @State private var motionManager = MotionManager()
   @State private var startTime = Date.now
   @State private var dragOffset: CGSize = .zero
   @State private var touchPosition: CGPoint? = nil
@@ -72,8 +69,8 @@ public struct HolographicCardContainer<Content: View>: View {
       let halfW = max(width * 0.5, 1)
       let halfH = max(height * 0.5, 1)
       let effectiveTilt = CGPoint(
-        x: motionManager.tilt.x + dragOffset.width / halfW,
-        y: motionManager.tilt.y + dragOffset.height / halfH
+        x: dragOffset.width / halfW,
+        y: dragOffset.height / halfH
       )
       let shadowScale = min(width, height) * 0.04
 
@@ -114,8 +111,6 @@ public struct HolographicCardContainer<Content: View>: View {
             }
         )
     }
-    .onAppear { motionManager.start() }
-    .onDisappear { motionManager.stop() }
   }
 
 }

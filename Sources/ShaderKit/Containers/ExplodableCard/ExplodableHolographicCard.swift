@@ -67,7 +67,6 @@ public struct ExplodableHolographicCard: View {
   private let showControls: Bool
   private let layers: [CardLayer]
 
-  @State private var motionManager = MotionManager()
   @State private var startTime = Date.now
   @State private var dragOffset: CGSize = .zero
   @State private var touchPosition: CGPoint? = nil
@@ -129,10 +128,8 @@ public struct ExplodableHolographicCard: View {
       }
     }
     .onAppear {
-      motionManager.start()
       spread = initialLayerSpacing
     }
-    .onDisappear { motionManager.stop() }
   }
 
   private var cardView: some View {
@@ -141,8 +138,8 @@ public struct ExplodableHolographicCard: View {
       let halfW = max(width * 0.5, 1)
       let halfH = max(height * 0.5, 1)
       let effectiveTilt = CGPoint(
-        x: motionManager.tilt.x + (showControls ? 0 : dragOffset.width / halfW),
-        y: motionManager.tilt.y + (showControls ? 0 : dragOffset.height / halfH)
+        x: showControls ? 0 : dragOffset.width / halfW,
+        y: showControls ? 0 : dragOffset.height / halfH
       )
       let shadowScale = min(width, height) * 0.04
       let explosionFade = 1 - Double(explosionProgress) * 0.7
