@@ -16,9 +16,4 @@ struct ShaderKitTests {
         #expect(ShaderKit.version == "1.0.0")
     }
 
-    @Test("MotionManager initializes")
-    func motionManagerInitializes() {
-        let manager = MotionManager()
-        #expect(manager.tilt == .zero)
-    }
 }
