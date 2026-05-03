@@ -122,3 +122,147 @@ static float3 codexMix(float3 a, float3 b, float value) {
 
   return half4(clamp(result, half3(0.0h), half3(1.0h)), half(alpha));
 }
+
+[[stitchable]] half4 codexBadgeFoil(
+  float2 position,
+  SwiftUI::Layer layer,
+  float2 size,
+  float2 tilt,
+  float time,
+  float intensity,
+  float glow
+) {
+  half4 sampled = layer.sample(position);
+  float alpha = float(sampled.a);
+
+  if (alpha <= 0.001) {
+    return sampled;
+  }
+
+  float2 safeSize = max(size, float2(1.0));
+  float2 uv = position / safeSize;
+  float2 reactiveTilt = clamp(tilt, float2(-1.0), float2(1.0));
+  float t = time * 0.72;
+
+  float vertical = smoothstep(0.0, 1.0, uv.y);
+  float3 top = float3(0.64, 0.62, 1.0);
+  float3 middle = float3(0.46, 0.58, 1.0);
+  float3 bottom = float3(0.24, 0.30, 1.0);
+  float3 violet = float3(0.58, 0.55, 1.0);
+  float3 base = codexMix(top, middle, smoothstep(0.10, 0.48, vertical));
+  base = codexMix(base, bottom, smoothstep(0.42, 1.0, vertical));
+  base = codexMix(base, violet, smoothstep(0.0, 0.35, 1.0 - uv.y) * 0.08);
+  base = codexMix(float3(sampled.rgb), base, 1.0);
+
+  float2 centered = (uv - 0.5) * 2.0;
+  centered.x *= safeSize.x / safeSize.y;
+  float radial = length(centered);
+  float dome = codexSaturate(1.0 - radial * 0.72);
+  float3 normal = normalize(float3(
+    -centered.x * 0.36 + reactiveTilt.x * 0.10,
+    -centered.y * 0.36 + reactiveTilt.y * 0.10,
+    0.72 + dome * 0.62
+  ));
+  float3 lightDir = normalize(float3(
+    -0.45 + reactiveTilt.x * 0.28,
+    -0.62 + reactiveTilt.y * 0.24,
+    0.96
+  ));
+  float3 viewDir = normalize(float3(
+    -reactiveTilt.x * 0.18,
+    -reactiveTilt.y * 0.16,
+    1.0
+  ));
+  float3 halfDir = normalize(lightDir + viewDir);
+  float ndotl = codexSaturate(dot(normal, lightDir));
+  float ndoth = codexSaturate(dot(normal, halfDir));
+  float ndotv = codexSaturate(dot(normal, viewDir));
+  float metalShadow = pow(1.0 - ndotl, 1.45) * smoothstep(0.20, 0.96, radial);
+  float grazing = pow(1.0 - ndotv, 2.25);
+  float specularWide = pow(ndoth, 15.0);
+  float specularTight = pow(ndoth, 56.0);
+  float clearcoat = pow(ndoth, 118.0);
+  float filmWave = sin((normal.x * 2.9 - normal.y * 1.8 + radial * 1.7 + t * 0.30) * 6.28318) * 0.5 + 0.5;
+
+  float2 diagonalDirection = normalize(float2(0.72, 1.0));
+  float diagonal = dot(uv + reactiveTilt * 0.20, diagonalDirection);
+  float sweepTravel = fract(t * 0.16 + reactiveTilt.x * 0.10 + reactiveTilt.y * 0.05);
+  float sweepCenter = -0.20 + sweepTravel * 1.72;
+  float sweepWarp = (valueNoise(uv * 3.0 + float2(t * 0.10, -t * 0.06)) - 0.5) * 0.10;
+  sweepWarp += sin((uv.x * 1.7 - uv.y * 1.15 + t * 0.22) * 6.28318) * 0.025;
+  float sweepDistance = diagonal + sweepWarp - sweepCenter;
+  float sweepEnvelope = smoothstep(0.0, 0.12, sweepTravel) * smoothstep(1.0, 0.82, sweepTravel);
+  float upperReflectionMask = smoothstep(0.80, 0.18, uv.y);
+  float softSweep = exp(-pow(sweepDistance / 0.30, 2.0)) * sweepEnvelope * upperReflectionMask * 0.24;
+  float sweepCore = exp(-pow(sweepDistance / 0.12, 2.0)) * sweepEnvelope * upperReflectionMask * 0.16;
+  float sweepGlow = exp(-pow(sweepDistance / 0.48, 2.0)) * sweepEnvelope * upperReflectionMask * 0.18;
+  float bandCenter = 0.56 + reactiveTilt.x * 0.16 + reactiveTilt.y * 0.08 + sin(t * 0.55) * 0.04;
+  float bandDistance = (diagonal - bandCenter) / 0.20;
+  float broadBand = max(exp(-(bandDistance * bandDistance)) * 0.20, softSweep);
+  float hotBand = max(exp(-(bandDistance * bandDistance) * 8.5) * 0.12, sweepCore * 0.44);
+
+  float counterDiagonal = dot(uv + float2(reactiveTilt.y, -reactiveTilt.x) * 0.12, normalize(float2(-0.65, 1.0)));
+  float secondaryDistance = (counterDiagonal - (0.38 - sin(t * 0.74) * 0.12)) / 0.24;
+  float secondaryBand = exp(-(secondaryDistance * secondaryDistance)) * 0.62;
+
+  float glassArcY = 0.20 + sin((uv.x + reactiveTilt.x * 0.10) * 3.14159) * 0.075 + reactiveTilt.y * 0.035;
+  float glassArc = exp(-pow((uv.y - glassArcY) / 0.095, 2.0));
+  glassArc *= smoothstep(0.06, 0.35, uv.x) * smoothstep(0.96, 0.48, uv.x) * smoothstep(0.58, 0.08, uv.y) * 0.32;
+
+  float glassStreak = smoothstep(0.055, 0.0, abs(diagonal - (0.18 + reactiveTilt.x * 0.12 + sin(t * 0.6) * 0.05)));
+  glassStreak *= smoothstep(0.05, 0.40, uv.x) * smoothstep(0.64, 0.22, uv.y) * 0.28;
+
+  float foilLines = sin((diagonal + t * 0.16) * 82.0) * 0.5 + 0.5;
+  foilLines = pow(codexSaturate(foilLines), 10.0);
+  float brushed = sin((uv.x - uv.y * 0.26 + reactiveTilt.x * 0.18) * 72.0 + t * 1.8) * 0.5 + 0.5;
+  brushed = pow(codexSaturate(brushed), 6.0);
+  float microRidges = sin((uv.x * 0.52 + uv.y + t * 0.08) * 165.0) * 0.5 + 0.5;
+  microRidges = pow(codexSaturate(microRidges), 18.0);
+  float chromeRidges = sin((normal.x * 0.72 + normal.y * 0.38 + diagonal * 0.44 + t * 0.10) * 210.0) * 0.5 + 0.5;
+  chromeRidges = pow(codexSaturate(chromeRidges), 20.0) * (0.22 + specularWide * 0.78);
+  float mirrorLine = smoothstep(0.050, 0.0, abs(sweepDistance));
+  mirrorLine *= smoothstep(0.12, 0.56, uv.x) * smoothstep(0.94, 0.30, uv.y);
+
+  float2 sparkleUV = uv * 48.0;
+  float2 sparkleCell = floor(sparkleUV);
+  float2 sparkleLocal = fract(sparkleUV) - 0.5;
+  float sparkleRandom = hash21(sparkleCell);
+  float sparklePhase = sparkleRandom * 6.28318 + t * 9.5 + reactiveTilt.x * 10.0;
+  float sparklePoint = smoothstep(0.22, 0.0, length(sparkleLocal));
+  float sparkle = sparklePoint * pow(max(0.0, sin(sparklePhase)), 11.0) * step(0.72, sparkleRandom);
+  float starSparkle = sparklePoint * pow(max(0.0, sin(sparklePhase * 0.62 + 1.7)), 22.0) * step(0.92, sparkleRandom);
+
+  float upperGlow = smoothstep(0.82, 0.08, radial) * smoothstep(0.88, 0.12, uv.y);
+  float edgeGlow = smoothstep(0.48, 0.98, radial) * smoothstep(1.08, 0.76, radial);
+  float lowerDepth = smoothstep(0.34, 1.0, uv.y) * 0.08;
+
+  half3 violetFoil = half3(0.72h, 0.68h, 1.0h);
+  half3 cyanFoil = half3(0.58h, 0.78h, 1.0h);
+  half3 whiteFoil = half3(1.0h, 0.98h, 0.92h);
+  half3 glassBlue = half3(0.66h, 0.82h, 1.0h);
+  half3 deepViolet = half3(0.34h, 0.38h, 0.98h);
+  half3 chromeViolet = half3(0.78h, 0.72h, 1.0h);
+  half3 chromeCyan = half3(0.62h, 0.86h, 1.0h);
+  half3 filmColor = mix(chromeViolet, chromeCyan, half(filmWave));
+  half3 foilColor = mix(violetFoil, cyanFoil, half(smoothstep(0.10, 0.90, diagonal)));
+  foilColor = mix(foilColor, whiteFoil, half(hotBand * 0.28));
+
+  half3 result = half3(base);
+  result = mix(result, blendMultiply(result, deepViolet), half(metalShadow * 0.10));
+  result = blendScreen(result, filmColor * half((specularWide * 0.10 + grazing * 0.03 + chromeRidges * 0.08) * intensity * upperReflectionMask));
+  result = blendScreen(result, foilColor * half((broadBand * 0.12 + secondaryBand * 0.08 + hotBand * 0.10) * intensity * upperReflectionMask));
+  result = blendScreen(result, glassBlue * half((glassArc * 0.10 + glassStreak * 0.08) * glow));
+  result = blendScreen(result, cyanFoil * half((foilLines * 0.08 + brushed * 0.06 + microRidges * 0.05 + chromeRidges * 0.06) * intensity * upperReflectionMask));
+  half specularMask = half(codexSaturate(hotBand * 0.32 + specularTight * 0.42 + clearcoat * 0.50 + mirrorLine * 0.20 + softSweep * 0.14));
+  half3 paletteBody = half3(base);
+  result = mix(result, paletteBody, half(0.22h) * (1.0h - specularMask * 0.58h));
+  result = blendColorDodge(result, whiteFoil * half((hotBand * 0.01 + specularTight * 0.04 + clearcoat * 0.05) * intensity * upperReflectionMask));
+  result = mix(result, paletteBody, half(softSweep * 0.16));
+  result += filmColor * half((specularWide * 0.12 + chromeRidges * 0.08 + softSweep * 0.06 + sweepGlow * 0.04) * glow);
+  result += whiteFoil * half((sparkle * 0.52 + starSparkle * 0.72 + upperGlow * 0.03 + edgeGlow * 0.03 + specularTight * 0.12 + clearcoat * 0.18 + mirrorLine * 0.04 + sweepCore * 0.03) * glow);
+  result -= half3(0.01h, 0.012h, 0.03h) * half(lowerDepth);
+  result = adjustSaturation(result, 1.04);
+  result = adjustContrast(result, 1.04);
+
+  return half4(clamp(result, half3(0.0h), half3(1.0h)), half(alpha));
+}

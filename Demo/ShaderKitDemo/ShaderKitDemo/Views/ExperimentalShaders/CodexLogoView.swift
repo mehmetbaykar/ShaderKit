@@ -141,23 +141,21 @@ enum CodexLogoMotionResponse {
 struct CodexLogoView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var motionManager = MotionManager()
-  @State private var dragTilt = CGPoint.zero
-  private let intensity = 1.08
   private let pulse = 0.78
-  private let density = 1.35
   private let glow = 1.04
   private let motion = 0.82
 
   var body: some View {
     ZStack {
-      LinearGradient(
+      RadialGradient(
         colors: [
-          Color(red: 0.02, green: 0.025, blue: 0.04),
-          Color(red: 0.06, green: 0.07, blue: 0.11),
-          Color(red: 0.02, green: 0.03, blue: 0.06)
+          Color.white,
+          Color(red: 0.965, green: 0.970, blue: 0.985),
+          Color(red: 0.905, green: 0.920, blue: 0.965)
         ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
+        center: .topLeading,
+        startRadius: 80,
+        endRadius: 620
       )
       .ignoresSafeArea()
 
@@ -165,7 +163,7 @@ struct CodexLogoView: View {
         let time = context.date.timeIntervalSinceReferenceDate
         let tilt = CodexLogoMotionResponse.effectiveTilt(
           deviceTilt: motionManager.tilt,
-          dragTilt: dragTilt,
+          dragTilt: .zero,
           motionStrength: motion,
           hasDeviceMotion: motionManager.isAvailable
         )
@@ -179,17 +177,12 @@ struct CodexLogoView: View {
           time: time,
           tilt: tilt,
           scale: scale,
-          intensity: intensity,
-          pulse: pulse,
-          density: density,
           glow: glow,
-          motion: motion,
-          reduceMotion: reduceMotion,
-          dragTilt: $dragTilt
+          reduceMotion: reduceMotion
         )
-        .frame(maxWidth: 360)
+        .frame(maxWidth: 390)
         .aspectRatio(1.0, contentMode: .fit)
-        .padding(.horizontal, 26)
+        .padding(.horizontal, 24)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -207,77 +200,109 @@ struct CodexLogoView: View {
 }
 
 private struct CodexLogoMark: View {
+  private let depthLayerCount = 22
+
   let time: TimeInterval
   let tilt: CGPoint
   let scale: Double
-  let intensity: Double
-  let pulse: Double
-  let density: Double
   let glow: Double
-  let motion: Double
   let reduceMotion: Bool
-  @Binding var dragTilt: CGPoint
 
   var body: some View {
     GeometryReader { proxy in
       let availableSize = proxy.size
       let renderSide = max(1.0, min(availableSize.width, availableSize.height))
       let renderSize = CGSize(width: renderSide, height: renderSide)
-      let glowRadius = reduceMotion ? 16.0 : 30.0 + glow * 10.0
+      let tiltX = CGFloat(tilt.x)
+      let tiltY = CGFloat(tilt.y)
+      let depthX = -max(renderSide * 0.040, renderSide * (0.068 - tiltX * 0.012))
+      let depthY = max(renderSide * 0.036, renderSide * (0.058 + tiltY * 0.010))
+      let rimWidth = max(12.0, renderSide * 0.054)
+      let innerRimWidth = max(4.0, renderSide * 0.018)
+      let glyphWidth = renderSide * 0.078
+      let glowRadius = reduceMotion ? 10.0 : 18.0 + glow * 6.0
 
       ZStack {
         CodexLogoBlobShape()
           .fill(Color(red: 0.24, green: 0.36, blue: 1.0))
           .blur(radius: glowRadius)
-          .opacity(0.34 + glow * 0.14)
-          .scaleEffect(1.015)
+          .opacity(0.30 + glow * 0.08)
+          .scaleEffect(1.025)
+          .offset(x: depthX * 0.20, y: depthY * 0.16)
 
-        CodexLogoBlobShape()
-          .fill(.white)
-          .layerEffect(
-            ShaderKit.shaders.codexLogoBrain(
-              .float2(renderSize.width, renderSize.height),
-              .float2(tilt.x, tilt.y),
-              .float(time),
-              .float(reduceMotion ? intensity * 0.65 : intensity),
-              .float(reduceMotion ? pulse * 0.18 : pulse),
-              .float(reduceMotion ? density * 0.55 : density),
-              .float(reduceMotion ? glow * 0.55 : glow),
-              .float(reduceMotion ? motion * 0.15 : motion)
-            ),
-            maxSampleOffset: .zero
-          )
-          .shadow(color: Color(red: 0.27, green: 0.42, blue: 1.0).opacity(0.65), radius: 22, y: 12)
+        ForEach((1...depthLayerCount).reversed(), id: \.self) { index in
+          let progress = CGFloat(index) / CGFloat(depthLayerCount)
+
+          CodexLogoBlobShape()
+            .fill(
+              LinearGradient(
+                colors: [
+                  Color(red: 0.58, green: 0.52, blue: 1.0),
+                  Color(red: 0.31, green: 0.38, blue: 0.98),
+                  Color(red: 0.12, green: 0.18, blue: 0.72)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+            .overlay {
+              CodexLogoBlobShape()
+                .stroke(
+                  Color(red: 0.68, green: 0.66, blue: 1.0).opacity(0.10 + progress * 0.12),
+                  lineWidth: max(1.0, renderSide * 0.010)
+                )
+            }
+            .offset(x: depthX * progress, y: depthY * progress)
+        }
+
+        faceLayer(renderSize: renderSize)
+          .overlay {
+            CodexLogoBlobShape()
+              .stroke(
+                Color(red: 0.12, green: 0.14, blue: 0.58).opacity(0.42),
+                lineWidth: rimWidth * 1.12
+              )
+              .blur(radius: renderSide * 0.006)
+              .offset(x: renderSide * 0.006, y: renderSide * 0.010)
+              .mask(CodexLogoBlobShape())
+          }
           .overlay {
             CodexLogoBlobShape()
               .stroke(
                 LinearGradient(
                   colors: [
-                    .white.opacity(0.52),
-                    .white.opacity(0.08),
-                    Color(red: 0.55, green: 0.72, blue: 1.0).opacity(0.34)
+                    Color.white.opacity(0.92),
+                    Color(red: 0.72, green: 0.66, blue: 1.0).opacity(0.90),
+                    Color(red: 0.22, green: 0.32, blue: 1.0).opacity(0.58)
                   ],
                   startPoint: .topLeading,
                   endPoint: .bottomTrailing
                 ),
-                lineWidth: max(1.0, renderSide * 0.012)
+                lineWidth: rimWidth
               )
           }
+          .overlay {
+            CodexLogoBlobShape()
+              .stroke(
+                LinearGradient(
+                  colors: [
+                    Color.white.opacity(0.95),
+                    Color.white.opacity(0.38),
+                    Color(red: 0.60, green: 0.68, blue: 1.0).opacity(0.22)
+                  ],
+                  startPoint: .topLeading,
+                  endPoint: .bottomTrailing
+                ),
+                lineWidth: innerRimWidth
+              )
+              .offset(x: -renderSide * 0.006, y: -renderSide * 0.010)
+              .blur(radius: 0.4)
+          }
 
-        CodexLogoTerminalMarks()
-          .stroke(
-            .white,
-            style: StrokeStyle(
-              lineWidth: renderSide * 0.078,
-              lineCap: .round,
-              lineJoin: .round
-            )
-          )
-          .shadow(color: .white.opacity(0.28), radius: 5)
+        CodexLogoTerminal3DMarks(lineWidth: glyphWidth, sideOffset: CGSize(width: depthX, height: depthY))
       }
       .frame(width: renderSize.width, height: renderSize.height)
       .contentShape(Rectangle())
-      .gesture(dragGesture(in: renderSize))
       .scaleEffect(scale)
       .rotation3DEffect(
         .degrees(tilt.y * -7.0),
@@ -285,7 +310,7 @@ private struct CodexLogoMark: View {
         perspective: 0.55
       )
       .rotation3DEffect(
-        .degrees(tilt.x * 7.0),
+        .degrees(tilt.x * 7.5),
         axis: (x: 0.0, y: 1.0, z: 0.0),
         perspective: 0.55
       )
@@ -294,19 +319,100 @@ private struct CodexLogoMark: View {
     .aspectRatio(1.0, contentMode: .fit)
   }
 
-  private func dragGesture(in size: CGSize) -> some Gesture {
-    DragGesture(minimumDistance: 0)
-      .onChanged { value in
-        dragTilt = CGPoint(
-          x: min(max((value.location.x / max(size.width, 1.0) - 0.5) * 2.0, -1.0), 1.0),
-          y: min(max((value.location.y / max(size.height, 1.0) - 0.5) * 2.0, -1.0), 1.0)
+  private func faceLayer(renderSize: CGSize) -> some View {
+    ZStack {
+      CodexLogoBlobShape()
+        .fill(
+          LinearGradient(
+            colors: [
+              Color(red: 0.64, green: 0.62, blue: 1.0),
+              Color(red: 0.46, green: 0.58, blue: 1.0),
+              Color(red: 0.24, green: 0.30, blue: 1.0)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
         )
-      }
-      .onEnded { _ in
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
-          dragTilt = .zero
-        }
-      }
+        .layerEffect(
+          ShaderKit.shaders.codexBadgeFoil(
+            .float2(renderSize.width, renderSize.height),
+            .float2(tilt.x, tilt.y),
+            .float(reduceMotion ? 0.0 : time),
+            .float(reduceMotion ? 0.24 : 0.42),
+            .float(reduceMotion ? 0.20 : 0.34)
+          ),
+          maxSampleOffset: .zero
+        )
+    }
+    .compositingGroup()
+  }
+}
+
+private struct CodexLogoTerminal3DMarks: View {
+  let lineWidth: CGFloat
+  let sideOffset: CGSize
+
+  var body: some View {
+    ZStack {
+      CodexLogoTerminalMarks()
+        .stroke(
+          Color(red: 0.10, green: 0.12, blue: 0.35).opacity(0.28),
+          style: strokeStyle(width: lineWidth * 1.06)
+        )
+        .blur(radius: lineWidth * 0.045)
+        .offset(x: sideOffset.width * 0.20, y: sideOffset.height * 0.34)
+
+      CodexLogoTerminalMarks()
+        .stroke(
+          LinearGradient(
+            colors: [
+              Color(red: 0.74, green: 0.75, blue: 0.90),
+              Color(red: 0.56, green: 0.59, blue: 0.82)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          ),
+          style: strokeStyle(width: lineWidth * 1.04)
+        )
+        .offset(x: sideOffset.width * 0.08, y: sideOffset.height * 0.12)
+
+      CodexLogoTerminalMarks()
+        .stroke(
+          LinearGradient(
+            colors: [
+              Color.white,
+              Color(red: 0.99, green: 0.98, blue: 0.94),
+              Color(red: 0.88, green: 0.89, blue: 0.97)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          ),
+          style: strokeStyle(width: lineWidth)
+        )
+        .shadow(color: Color.white.opacity(0.45), radius: lineWidth * 0.05, x: -1, y: -1)
+        .shadow(
+          color: Color(red: 0.08, green: 0.10, blue: 0.30).opacity(0.24),
+          radius: lineWidth * 0.14,
+          x: sideOffset.width * 0.10,
+          y: sideOffset.height * 0.12
+        )
+
+      CodexLogoTerminalMarks()
+        .stroke(
+          Color.white.opacity(0.76),
+          style: strokeStyle(width: lineWidth * 0.20)
+        )
+        .blur(radius: 0.5)
+        .offset(x: -sideOffset.width * 0.05, y: -sideOffset.height * 0.08)
+    }
+  }
+
+  private func strokeStyle(width: CGFloat) -> StrokeStyle {
+    StrokeStyle(
+      lineWidth: width,
+      lineCap: .round,
+      lineJoin: .round
+    )
   }
 }
 
