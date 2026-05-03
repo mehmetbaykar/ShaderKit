@@ -33,9 +33,10 @@ enum ShaderType: String, CaseIterable, Identifiable {
   case polishedAluminum = "Polished Aluminum"
   case halftonePastel = "Halftone Pastel"
 
-  // Composable Shaders (8 items)
+  // Composable Shaders (9 items)
   case foilGlitterSweep = "Foil + Glitter + Sweep"
   case cardLayerExplode = "Card Layer Explode"
+  case codexGradientFoil = "Codex Gradient Foil"
   case gradientFoil = "Gradient Foil"
   case psychicHolo = "Psychic Holo"
   case starburstRadial = "Starburst Radial"
@@ -61,8 +62,8 @@ enum ShaderType: String, CaseIterable, Identifiable {
         .radiantHolo, .amazingRare, .spiralRings, .snowfall, .frozen,
         .polishedAluminum, .halftonePastel:
       return .basic
-    case .foilGlitterSweep, .cardLayerExplode, .gradientFoil, .psychicHolo,
-        .starburstRadial, .layeredHolo, .maskedFoil, .glassEnclosure:
+    case .foilGlitterSweep, .cardLayerExplode, .codexGradientFoil, .gradientFoil,
+        .psychicHolo, .starburstRadial, .layeredHolo, .maskedFoil, .glassEnclosure:
       return .composable
     case .water:
       return .paper
@@ -111,6 +112,8 @@ enum ShaderType: String, CaseIterable, Identifiable {
       return "Combined foil, glitter, and light sweep"
     case .cardLayerExplode:
       return "Exploded card composition with 3D layer controls"
+    case .codexGradientFoil:
+      return "Codex artwork with gradient foil effects"
     case .gradientFoil:
       return "Multi-color gradient with foil effects"
     case .psychicHolo:
@@ -158,6 +161,7 @@ enum ShaderType: String, CaseIterable, Identifiable {
     // Composable Shaders
     case .foilGlitterSweep: return "wand.and.sparkles"
     case .cardLayerExplode: return "slider.horizontal.3"
+    case .codexGradientFoil: return "terminal.fill"
     case .gradientFoil: return "paintpalette.fill"
     case .psychicHolo: return "eye.fill"
     case .starburstRadial: return "sun.max.trianglebadge.exclamationmark.fill"
@@ -215,6 +219,8 @@ enum ShaderType: String, CaseIterable, Identifiable {
       FoilGlitterSweepView()
     case .cardLayerExplode:
       CardLayerExplodeView()
+    case .codexGradientFoil:
+      CodexGradientFoilView()
     case .gradientFoil:
       GradientFoilView()
     case .psychicHolo:
